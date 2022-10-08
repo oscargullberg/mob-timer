@@ -17,6 +17,7 @@
 		display: block;
 		background: var(--header-background-color);
 		color: var(--header-text-color);
+		font-weight: 700;
 	}
 	li {
 		margin-left: var(--header-item-spacing);

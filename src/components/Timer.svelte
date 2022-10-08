@@ -1,16 +1,13 @@
 <script lang="ts">
-	import { timer, timerConfig } from '../stores';
+	import { timer, timerConfig, remaining } from '../stores';
 	import { createEventDispatcher } from 'svelte';
+
 	const dispatch = createEventDispatcher();
 
 	let hover = false;
-	$: toggleText = $timerConfig.running ? 'Pause' : 'Start';
-	$: remainingMinutes = Math.floor($timer / 60)
-		.toString()
-		.padStart(2, '0');
-	$: remainingSeconds = Math.floor($timer % 60)
-		.toString()
-		.padStart(2, '0');
+	$: toggleText = $timerConfig.running
+		? '<span aria-label="pause timer">⏸️</span>'
+		: '<span aria-label="start timer">▶️</span>';
 
 	setInterval(() => {
 		if ($timerConfig.running) {
@@ -48,7 +45,7 @@
 		{#if !$timerConfig.running && hover}
 			<input
 				type="number"
-				value={remainingMinutes}
+				value={$remaining.minutes}
 				min="1"
 				max="99"
 				on:input={(e) => {
@@ -60,20 +57,30 @@
 				}}
 			/>
 		{:else}
-			<span>{remainingMinutes}</span>
-		{/if}:<span>{remainingSeconds}</span>
+			<span>{$remaining.minutes}</span>
+		{/if}:<span>{$remaining.seconds}</span>
 	</div>
-	<button type="button" on:click={handleToggleClick}>{toggleText}</button>
-	<button type="button" on:click={handleResetClick}>Reset</button>
+	<div>
+		<button class="timer-button" type="button" on:click={handleToggleClick}
+			>{@html toggleText}</button
+		>
+		<button class="timer-button" type="button" on:click={handleResetClick} aria-label="stop timer"
+			>⏹</button
+		>
+	</div>
 </div>
 
 <style>
 	.timer {
 		display: flex;
+		font-size: 2rem;
 	}
 
 	.timer-time {
 		display: flex;
+	}
+	.timer-button {
+		font-size: 2rem;
 	}
 
 	.timer > * {
