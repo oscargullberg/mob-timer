@@ -43,7 +43,7 @@
 				<span on:click={() => setActive(mobster.id)} class:active={mobster.active}
 					>{mobster.name}</span
 				><button
-					class="mobster-delete"
+					class="mobster-delete-button"
 					type="button"
 					on:click={() => remove(mobster.id)}
 					aria-label={`Remove ${mobster.name}`}>❌</button
@@ -73,27 +73,36 @@
 		margin-right: auto;
 		font-size: 1.5rem;
 	}
-	.mobsters-add-button {
-		display: flex;
-	}
 	.mobsters-add-input {
 		width: 100%;
 		margin-bottom: 1px;
 	}
 	.mobsters-add-button {
+		display: flex;
+		opacity: 0.7;
 		margin-left: auto;
 		margin-right: auto;
 		color: var(--button-text);
-		background-color: #0f0f0fa1;
+		background-color: rgb(15, 15, 15);
+		opacity: 0.6;
 		display: block;
 		padding: 0.5rem;
 		width: 100%;
 		border-radius: 2px;
 		text-transform: uppercase;
 		font-weight: 900;
+		transition: opacity 0.5s ease-out;
 	}
-	.mobster-delete {
+	.mobsters-add-button:hover {
+		opacity: 0.7;
+	}
+	.mobster-delete-button {
 		margin-left: auto;
+		opacity: 0.7;
+		transition: opacity 0.5s ease-out;
+	}
+	.mobster-delete-button:hover {
+		opacity: 1;
 	}
 	li {
 		display: flex;

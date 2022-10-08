@@ -21,7 +21,11 @@ const defaultTimerConfig = {
 };
 
 export const timerConfig = writable<TimerConfig>(defaultTimerConfig);
-export const timer = writable<number>(defaultTurnDurationMinutes * 60);
+export const timer = writable<number>(defaultTimerConfig.initialSeconds);
+export const mobsters = writable<Mobster[]>([]);
+export const broadcast = writable<BroadcastState>({
+	lastChange: 0
+});
 export const remaining = derived(timer, ($seconds) => ({
 	minutes: Math.floor($seconds / 60)
 		.toString()
@@ -30,8 +34,3 @@ export const remaining = derived(timer, ($seconds) => ({
 		.toString()
 		.padStart(2, '0')
 }));
-export const mobsters = writable<Mobster[]>([]);
-export const lastUpdateSource = writable<string | undefined>();
-export const broadcast = writable<BroadcastState>({
-	lastChange: 0
-});

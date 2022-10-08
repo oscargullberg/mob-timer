@@ -12,7 +12,7 @@
 
 	const cleanedPathParam = $page.params['roomId'].replace(/[^a-z0-9 -]/gi, '');
 	const roomId = `${cleanedPathParam}-mob-bois-2k`;
-	
+
 	let peer: Peer;
 	let isMainNode = false;
 	let peerList: Set<string> = new Set();

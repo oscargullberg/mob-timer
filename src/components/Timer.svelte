@@ -75,19 +75,23 @@
 		display: flex;
 		font-size: 2rem;
 	}
-
 	.timer-time {
 		display: flex;
 	}
 	.timer-button {
 		font-size: 2rem;
+		opacity: 0.85;
+		transition: opacity 0.5s ease-out;
 	}
-
+	.timer-button:hover {
+		opacity: 1;
+	}
 	.timer > * {
 		margin-left: var(--header-item-spacing);
 	}
-
 	input[type='number'] {
+		opacity: 0.9;
+		font-size: 2rem;
 		color: var(--header-text-color);
 		background-color: var(--header-background-color);
 		outline: none;
