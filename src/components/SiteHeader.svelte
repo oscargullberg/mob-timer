@@ -14,6 +14,7 @@
 <style>
 	header {
 		width: 100%;
+		margin-bottom: 2rem;
 		display: block;
 		background: var(--header-background-color);
 		color: var(--header-text-color);

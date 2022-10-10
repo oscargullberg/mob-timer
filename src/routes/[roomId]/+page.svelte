@@ -17,18 +17,23 @@
 	<title>{title}</title>
 </svelte:head>
 
-<SiteHeader on:timerConfigUpdated={updateBroadcastState} />
+<div class="wrapper">
+	<SiteHeader on:timerConfigUpdated={updateBroadcastState} />
 
-<Peer />
+	<Peer />
 
-<div class="main">
-	<Mobsters on:mobstersUpdated={updateBroadcastState} />
+	<main class="main">
+		<Mobsters on:mobstersUpdated={updateBroadcastState} />
+	</main>
 </div>
 
 <style>
+	.wrapper {
+		background-color: #111;
+	}
 	.main {
+		min-height: 93vh;
 		display: flex;
-		align-items: center;
 		justify-content: center;
 	}
 </style>

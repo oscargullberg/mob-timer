@@ -16,7 +16,7 @@
 		const i = $mobsters.findIndex((m) => m.active);
 		if (i >= 0) {
 			$mobsters[i].active = false;
-			$mobsters[i % $mobsters.length].active = true;
+			$mobsters[(i + 1) % $mobsters.length].active = true;
 		}
 	}
 
@@ -67,11 +67,17 @@
 	.mobsters {
 		display: flex;
 		flex-direction: column;
+		background-color: #fff;
+		height: 100%;
+		border-radius: 7px;
+		padding: 2rem;
 	}
 	.mobsters-header {
 		margin-left: auto;
 		margin-right: auto;
 		font-size: 1.5rem;
+		font-weight: 800;
+		margin-bottom: 1rem;
 	}
 	.mobsters-add-input {
 		width: 100%;

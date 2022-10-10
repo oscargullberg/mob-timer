@@ -14,12 +14,15 @@
 			if ($timer > 0) {
 				$timer -= 1;
 			}
+
 			if ($timer === 0) {
 				$timerConfig.running = false;
+				dispatch('roundFinished');
 				if (Notification.permission === 'granted') {
 					new Notification(`Time to rotate!`, { tag: 'newTurn' });
 				}
-				dispatch('roundFinished');
+				var audio = new Audio('spooky-gong.mp3');
+				audio.play();
 			}
 		}
 	}, 1000);
@@ -29,6 +32,9 @@
 		dispatch('timerConfigUpdated');
 
 		if ($timerConfig.running) {
+			if ($timer === 0) {
+				$timer = $timerConfig.initialSeconds;
+			}
 			await Notification?.requestPermission();
 		}
 	}
