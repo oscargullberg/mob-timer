@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { mobsters, timerConfig } from '../stores';
+	import { mobsters, activeMobster } from '../stores';
 	import { createEventDispatcher } from 'svelte';
 	import { blur } from 'svelte/transition';
 
@@ -7,26 +7,17 @@
 
 	let newMobsterName = '';
 
-	// Should be triggered by event
-	$: if (!$timerConfig.running) {
-		onTimerStop();
-	}
-
-	function onTimerStop() {
-		const i = $mobsters.findIndex((m) => m.active);
-		if (i >= 0) {
-			$mobsters[i].active = false;
-			$mobsters[(i + 1) % $mobsters.length].active = true;
-		}
-	}
-
 	function add(name: string) {
-		$mobsters = [...$mobsters, { name, id: Date.now().toString(), active: !$mobsters.length }];
+		$mobsters = [...$mobsters, { name, id: Date.now().toString(), active: !$activeMobster }];
 		newMobsterName = '';
 		dispatch('mobstersUpdated');
 	}
 	function remove(id: string) {
-		$mobsters = $mobsters.filter((m) => m.id !== id);
+		const newMobsters = $mobsters.filter((m) => m.id !== id);
+		if ($activeMobster?.id == id && newMobsters.length) {
+			newMobsters[0].active = true;
+		}
+		$mobsters = newMobsters;
 		dispatch('mobstersUpdated');
 	}
 	function setActive(id: string) {
