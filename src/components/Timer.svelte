@@ -14,29 +14,17 @@
 			if ($timer > 0) {
 				$timer -= 1;
 			}
-
 			if ($timer === 0) {
+				dispatch('turnFinished');
 				$timerConfig.running = false;
-				dispatch('roundFinished');
-				if (Notification.permission === 'granted') {
-					new Notification(`Time to rotate!`, { tag: 'newTurn' });
-				}
-				var audio = new Audio('spooky-gong.mp3');
-				audio.play();
 			}
 		}
 	}, 1000);
 
 	async function handleToggleClick() {
 		$timerConfig.running = !$timerConfig.running;
+		await Notification?.requestPermission();
 		dispatch('timerConfigUpdated');
-
-		if ($timerConfig.running) {
-			if ($timer === 0) {
-				$timer = $timerConfig.initialSeconds;
-			}
-			await Notification?.requestPermission();
-		}
 	}
 	function handleResetClick() {
 		$timerConfig.running = false;
@@ -56,9 +44,10 @@
 				max="99"
 				on:input={(e) => {
 					// @ts-ignore
-					const newVal = e.target.value;
-					$timer = newVal * 60;
-					$timerConfig.initialSeconds = newVal * 60;
+					const minutes = e.target.value;
+					const seconds = minutes * 60;
+					$timer = seconds;
+					$timerConfig.initialSeconds = seconds;
 					dispatch('timerConfigUpdated');
 				}}
 			/>

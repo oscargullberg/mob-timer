@@ -6,7 +6,7 @@
 	<ul>
 		<li><h1>Write code, don't cry.</h1></li>
 		<li>
-			<Timer on:timerConfigUpdated />
+			<Timer on:timerConfigUpdated on:turnFinished />
 		</li>
 	</ul>
 </header>
