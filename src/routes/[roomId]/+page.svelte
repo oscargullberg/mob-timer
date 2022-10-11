@@ -3,11 +3,18 @@
 	import Peer from '../../components/Peer.svelte';
 	import Mobsters from '../../components/Mobsters.svelte';
 	import { broadcast, remaining, mobsters, timerConfig, timer, activeMobster } from '../../stores';
+	import { browser } from '$app/environment';
 
 	$: title = [`[${$remaining.minutes}:${$remaining.seconds}]`, $activeMobster?.name, 'mob timer']
 		.filter(Boolean)
 		.join(' - ');
 	const notificationAudio = new Audio('spooky-gong.mp3');
+
+	if (browser) {
+		tryRequestWakeLock().then(() => {
+			document.onvisibilitychange = onVisibilityChange;
+		});
+	}
 
 	function updateBroadcastState() {
 		$broadcast = {
@@ -30,6 +37,22 @@
 			});
 		}
 		notificationAudio.play();
+	}
+
+	async function onVisibilityChange(ev: Event) {
+		if (document.visibilityState === 'visible') {
+			await tryRequestWakeLock();
+		}
+	}
+
+	async function tryRequestWakeLock() {
+		try {
+			if ('wakeLock' in navigator) {
+				await (navigator as any).wakeLock.request();
+			}
+		} catch (err) {
+			console.warn(err);
+		}
 	}
 </script>
 
