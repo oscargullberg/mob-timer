@@ -24,9 +24,11 @@
 	let peerList = $state(new Set<string>());
 	let connections = $state<Record<string, DataConnection>>({});
 	let currentStateVersion = $state<AppStateVersion>({ updatedAt: 0, originPeerId: '' });
+	let peerReady = $state(0);
 
 	$effect(() => {
 		const change = $broadcast;
+		peerReady;
 		untrack(() => {
 			const version = createLocalVersion(change.lastChange);
 			if (version) {
@@ -67,6 +69,7 @@
 		} else {
 			setupRegularPeer(peer);
 		}
+		peerReady++;
 	}
 
 	function createPeer(): Promise<Peer> {
@@ -92,81 +95,73 @@
 	function setupMainPeer(mainPeer: Peer) {
 		peerList.add(peerRoomId);
 		mainPeer.on('connection', (conn) => {
-			conn.on('data', (data) => {
-				const msg = parsePeerMessage(data);
-				if (!msg) {
-					return;
-				}
-
-				switch (msg.type) {
-					case 'PROPOSE_APP_STATE':
-						if (conn.peer !== msg.payload.peerId) {
-							return;
-						}
-
-						if (!isNewerAppStateVersion(msg.payload.version, currentStateVersion)) {
-							conn.send(
-								JSON.stringify(
-									createSetAppStateMessage($mobsters, $timerState, currentStateVersion)
-								)
-							);
-							return;
-						}
-
-						$mobsters = msg.payload.mobsters;
-						$timerState = {
-							...msg.payload.timerState,
-							updatedAt: Date.now()
-						};
-						currentStateVersion = msg.payload.version;
-
-						broadcastState($mobsters, $timerState, currentStateVersion);
-						break;
-					case 'GOSSIP_APP_STATE':
-						if (conn.peer !== msg.payload.peerId) {
-							return;
-						}
-
-						if (!isNewerAppStateVersion(msg.payload.version, currentStateVersion)) {
-							return;
-						}
-
-						$mobsters = msg.payload.mobsters;
-						$timerState = {
-							...msg.payload.timerState,
-							updatedAt: Date.now()
-						};
-						currentStateVersion = msg.payload.version;
-						broadcastState($mobsters, $timerState, currentStateVersion);
-						break;
-					case 'INIT':
-						const { peerId } = msg.payload;
-						console.debug(`Peer with peer id ${peerId} connected.`);
-						connections[peerId] = conn;
-						peerList.add(peerId);
-						broadcastPeerList();
-						conn.send(
-							JSON.stringify({
-								type: 'SET_APP_STATE',
-								payload: {
-									mobsters: $mobsters,
-									timerState: snapshotTimerState($timerState),
-									version: currentStateVersion,
-									peerId: mainPeer.id
-								}
-							})
-						);
-				}
-			});
-			conn.on('close', () => onConnectionClose(conn));
+			registerConnection(conn.peer, conn, handleMainPeerData);
 		});
 		return mainPeer;
 	}
 
+	function handleMainPeerData(conn: DataConnection, data: unknown) {
+		const msg = parsePeerMessage(data);
+		if (!msg) {
+			return;
+		}
+
+		switch (msg.type) {
+			case 'PROPOSE_APP_STATE':
+				if (conn.peer !== msg.payload.peerId) {
+					return;
+				}
+
+				if (!isNewerAppStateVersion(msg.payload.version, currentStateVersion)) {
+					conn.send(
+						JSON.stringify(createSetAppStateMessage($mobsters, $timerState, currentStateVersion))
+					);
+					return;
+				}
+
+				applyAppStateSnapshot(msg.payload.mobsters, msg.payload.timerState, msg.payload.version);
+				broadcastState($mobsters, $timerState, currentStateVersion);
+				break;
+			case 'GOSSIP_APP_STATE':
+				if (conn.peer !== msg.payload.peerId) {
+					return;
+				}
+
+				if (!isNewerAppStateVersion(msg.payload.version, currentStateVersion)) {
+					return;
+				}
+
+				applyAppStateSnapshot(msg.payload.mobsters, msg.payload.timerState, msg.payload.version);
+				broadcastState($mobsters, $timerState, currentStateVersion);
+				break;
+			case 'INIT':
+				const { peerId } = msg.payload;
+				if (conn.peer !== peerId) {
+					return;
+				}
+
+				console.debug(`Peer with peer id ${peerId} connected.`);
+				connections[peerId] = conn;
+				peerList.add(peerId);
+				broadcastPeerList();
+				conn.send(
+					JSON.stringify({
+						type: 'SET_APP_STATE',
+						payload: {
+							mobsters: $mobsters,
+							timerState: snapshotTimerState($timerState),
+							version: currentStateVersion,
+							peerId: peer?.id ?? ''
+						}
+					})
+				);
+		}
+	}
+
 	function setupRegularPeer(regularPeer: Peer) {
 		const conn = regularPeer.connect(peerRoomId, { reliable: true });
+		registerConnection(peerRoomId, conn, handleRegularPeerData);
 		conn.on('open', () => {
-			connections[peerRoomId] = conn;
 			const msg = JSON.stringify({
 				type: 'INIT',
 				payload: {
@@ -174,16 +169,11 @@
 				}
 			});
 			conn.send(msg);
+			peerReady++;
 		});
-		conn.on('data', (data) => handleRegularPeerData(conn, data));
-		conn.on('close', () => onConnectionClose(conn));
 
 		regularPeer.on('connection', (conn) => {
-			connections[conn.peer] = conn;
-			conn.on('data', (data) => handleRegularPeerData(conn, data));
-			conn.on('close', () => {
-				delete connections[conn.peer];
-			});
+			registerConnection(conn.peer, conn, handleRegularPeerData);
 		});
 	}
 
@@ -204,9 +194,7 @@
 					return;
 				}
 
-				$mobsters = msg.payload.mobsters;
-				$timerState = msg.payload.timerState;
-				currentStateVersion = msg.payload.version;
+				applyAppStateSnapshot(msg.payload.mobsters, msg.payload.timerState, msg.payload.version);
 				break;
 			case 'GOSSIP_APP_STATE':
 				if (conn.peer !== msg.payload.peerId) {
@@ -217,9 +205,8 @@
 					return;
 				}
 
-				$mobsters = msg.payload.mobsters;
-				$timerState = msg.payload.timerState;
-				currentStateVersion = msg.payload.version;
+				applyAppStateSnapshot(msg.payload.mobsters, msg.payload.timerState, msg.payload.version);
+				gossipStateToPeers($mobsters, $timerState, currentStateVersion, conn.peer);
 				break;
 			case 'SET_PEERLIST':
 				if (conn.peer !== peerRoomId) {
@@ -282,7 +269,8 @@
 	function gossipStateToPeers(
 		mobsters: Mobster[],
 		timerState: TimerState,
-		version: AppStateVersion
+		version: AppStateVersion,
+		excludePeerId?: string
 	) {
 		if (!peer?.open) {
 			return;
@@ -291,7 +279,7 @@
 		const msg = createAppStateMessage('GOSSIP_APP_STATE', mobsters, timerState, version);
 
 		for (let peerId of peerList.keys()) {
-			if (peerId === peer.id || peerId === peerRoomId) {
+			if (peerId === peer.id || peerId === peerRoomId || peerId === excludePeerId) {
 				continue;
 			}
 
@@ -299,8 +287,9 @@
 			if (conn?.open) {
 				conn.send(JSON.stringify(msg));
 			} else {
-				const newConn = peer.connect(peerId, { reliable: true }).on('open', () => {
-					connections[peerId] = newConn;
+				const newConn = peer.connect(peerId, { reliable: true });
+				registerConnection(peerId, newConn, handleRegularPeerData);
+				newConn.on('open', () => {
 					newConn.send(JSON.stringify(msg));
 				});
 			}
@@ -323,13 +312,43 @@
 			if (conn?.open) {
 				conn.send(JSON.stringify(msg));
 			} else {
-				const newConn = peer.connect(peerId, { reliable: true }).on('open', () => {
+				const newConn = peer.connect(peerId, { reliable: true });
+				registerConnection(peerId, newConn, handleMainPeerData);
+				newConn.on('open', () => {
 					console.debug('Connected to peerid ' + peerId);
-					connections[peerId] = newConn;
 					newConn.send(JSON.stringify(msg));
 				});
 			}
 		}
+	}
+
+	function registerConnection(
+		peerId: string,
+		conn: DataConnection,
+		handleData: (conn: DataConnection, data: unknown) => void
+	) {
+		connections[peerId] = conn;
+		conn.on('data', (data) => handleData(conn, data));
+		conn.on('close', () => {
+			if (isMainNode || peerId === peerRoomId) {
+				onConnectionClose(conn);
+			} else {
+				delete connections[peerId];
+			}
+		});
+	}
+
+	function applyAppStateSnapshot(
+		mobstersSnapshot: Mobster[],
+		timerStateSnapshot: TimerState,
+		version: AppStateVersion
+	) {
+		$mobsters = mobstersSnapshot;
+		$timerState = {
+			...timerStateSnapshot,
+			updatedAt: Date.now()
+		};
+		currentStateVersion = version;
 	}
 
 	function createSetAppStateMessage(
@@ -381,6 +400,7 @@
 			}
 			broadcastPeerList();
 		} else {
+			delete connections[peerRoomId];
 			let mainPeerCandidate = new Peer(peerRoomId);
 			mainPeerCandidate.once('error', (err) => {
 				if (isPeerUnavailableError(err)) {
@@ -390,6 +410,7 @@
 			mainPeerCandidate.once('open', (id) => {
 				peer?.destroy();
 				connections = {};
+				peerList = new Set([peerRoomId]);
 				isMainNode = true;
 				$isMainPeer = true;
 				peer = setupMainPeer(mainPeerCandidate);
