@@ -1,40 +1,56 @@
 import { browser } from '$app/environment';
-import { writable, derived } from 'svelte/store';
+import { writable, derived, readable } from 'svelte/store';
 import {
-	createDefaultTimerConfig,
+	createDefaultTimerState,
 	formatRemaining,
+	getTimerRemainingSeconds,
 	normalizeMobsters,
-	normalizeTimerConfig,
 	parseStoredMobsters,
-	parseStoredTimerConfig,
+	parseStoredTimerState,
 	rotateActiveMobster
 } from './state';
-import type { Mobster, TimerConfig } from './state';
+import type { Mobster, TimerState } from './state';
 import { readStoredItem, writeStoredJson } from './storage';
 
-export type { Mobster, TimerConfig };
+export type { Mobster, TimerState };
 
 export type BroadcastState = {
 	lastChange: number;
 };
 
 const mobstersKey = 'mobsters';
-const timerConfigKey = 'timerConfig';
-const defaultTimerConfig = createDefaultTimerConfig();
+const timerStateKey = 'timerState';
+const legacyTimerConfigKey = 'timerConfig';
+const defaultTimerState = createDefaultTimerState();
 
 const storedMobsters = browser ? readStoredItem(localStorage, mobstersKey) : null;
 const initialMobsters = parseStoredMobsters(storedMobsters);
-const storedTimerConfig = browser ? readStoredItem(localStorage, timerConfigKey) : null;
-const initialTimerConfig = storedTimerConfig
-	? parseStoredTimerConfig(storedTimerConfig)
-	: defaultTimerConfig;
+const storedTimerState = browser
+	? (readStoredItem(localStorage, timerStateKey) ??
+		readStoredItem(localStorage, legacyTimerConfigKey))
+	: null;
+const initialTimerState = storedTimerState
+	? parseStoredTimerState(storedTimerState)
+	: defaultTimerState;
 
-export const timerConfig = writable<TimerConfig>(initialTimerConfig);
-export const timer = writable<number>(initialTimerConfig.initialSeconds);
+const currentTime = readable(Date.now(), (set) => {
+	if (!browser) {
+		return;
+	}
+
+	const intervalId = window.setInterval(() => set(Date.now()), 250);
+	return () => window.clearInterval(intervalId);
+});
+
+export const timerState = writable<TimerState>(initialTimerState);
+export const timer = derived([timerState, currentTime], ([$timerState, $currentTime]) =>
+	getTimerRemainingSeconds($timerState, $currentTime)
+);
 export const mobsters = createMobsterStore(initialMobsters);
 export const broadcast = writable<BroadcastState>({
 	lastChange: 0
 });
+export const isMainPeer = writable(false);
 export const remaining = derived(timer, formatRemaining);
 export const activeMobster = derived(mobsters, ($mobsters) => $mobsters.find((m) => m.active));
 
@@ -44,9 +60,9 @@ if (browser) {
 			writeStoredJson(localStorage, mobstersKey, normalizeMobsters(m));
 		}
 	});
-	timerConfig.subscribe((t) => {
+	timerState.subscribe((t) => {
 		if (t) {
-			writeStoredJson(localStorage, timerConfigKey, normalizeTimerConfig(t));
+			writeStoredJson(localStorage, timerStateKey, t);
 		}
 	});
 }

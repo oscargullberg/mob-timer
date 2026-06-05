@@ -2,7 +2,8 @@
 	import SiteHeader from '../../components/SiteHeader.svelte';
 	import Peer from '../../components/Peer.svelte';
 	import Mobsters from '../../components/Mobsters.svelte';
-	import { broadcast, remaining, mobsters, timerConfig, timer, activeMobster } from '../../stores';
+	import { broadcast, remaining, mobsters, timerState, activeMobster } from '../../stores';
+	import { resetTimer } from '../../state';
 	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
@@ -36,7 +37,7 @@
 
 	function onTurnFinished() {
 		mobsters.changeMobster();
-		$timer = $timerConfig.initialSeconds;
+		timerState.update((state) => resetTimer(state, Date.now()));
 		updateBroadcastState();
 
 		const newMobsterName = $activeMobster?.name;

@@ -8,7 +8,7 @@ describe('parsePeerMessage', () => {
 		assert.equal(parsePeerMessage(JSON.stringify({ type: 'NOPE', payload: {} })), undefined);
 	});
 
-	it('normalizes app state messages before applying them', () => {
+	it('normalizes canonical app state messages before applying them', () => {
 		assert.deepEqual(
 			parsePeerMessage(
 				JSON.stringify({
@@ -18,8 +18,13 @@ describe('parsePeerMessage', () => {
 							{ id: 'a', name: 'Ada', active: true },
 							{ id: '', name: 'Broken', active: true }
 						],
-						timerConfig: { running: true, initialSeconds: 600 },
-						timer: Number.NaN,
+						timerState: {
+							running: true,
+							initialSeconds: 600,
+							remainingSeconds: 590,
+							updatedAt: 1000
+						},
+						version: { updatedAt: 2000, originPeerId: 'peer-a' },
 						peerId: 'peer-a'
 					}
 				})
@@ -28,11 +33,73 @@ describe('parsePeerMessage', () => {
 				type: 'SET_APP_STATE',
 				payload: {
 					mobsters: [{ id: 'a', name: 'Ada', active: true }],
-					timerConfig: { running: false, initialSeconds: 600 },
-					timer: 600,
+					timerState: {
+						running: true,
+						initialSeconds: 600,
+						remainingSeconds: 590,
+						updatedAt: 1000
+					},
+					version: { updatedAt: 2000, originPeerId: 'peer-a' },
 					peerId: 'peer-a'
 				}
 			}
+		);
+	});
+
+	it('normalizes proposed app state messages before applying them', () => {
+		assert.deepEqual(
+			parsePeerMessage(
+				JSON.stringify({
+					type: 'PROPOSE_APP_STATE',
+					payload: {
+						mobsters: [{ id: 'a', name: 'Ada', active: true }],
+						timerState: {
+							running: false,
+							initialSeconds: 600,
+							remainingSeconds: 600,
+							updatedAt: 1000
+						},
+						version: { updatedAt: 2000, originPeerId: 'peer-a' },
+						peerId: 'peer-a'
+					}
+				})
+			),
+			{
+				type: 'PROPOSE_APP_STATE',
+				payload: {
+					mobsters: [{ id: 'a', name: 'Ada', active: true }],
+					timerState: {
+						running: false,
+						initialSeconds: 600,
+						remainingSeconds: 600,
+						updatedAt: 1000
+					},
+					version: { updatedAt: 2000, originPeerId: 'peer-a' },
+					peerId: 'peer-a'
+				}
+			}
+		);
+	});
+
+	it('rejects app state messages without a valid version', () => {
+		assert.equal(
+			parsePeerMessage(
+				JSON.stringify({
+					type: 'SET_APP_STATE',
+					payload: {
+						mobsters: [],
+						timerState: {
+							running: false,
+							initialSeconds: 600,
+							remainingSeconds: 600,
+							updatedAt: 1000
+						},
+						version: { updatedAt: Number.NaN, originPeerId: 'peer-a' },
+						peerId: 'peer-a'
+					}
+				})
+			),
+			undefined
 		);
 	});
 

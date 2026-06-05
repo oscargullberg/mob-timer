@@ -1,6 +1,13 @@
 <script lang="ts">
-	import { timer, timerConfig, remaining } from '../stores';
-	import { secondsFromMinutes, sanitizeDurationMinutes } from '../state';
+	import { isMainPeer, remaining, timerState } from '../stores';
+	import {
+		pauseTimer,
+		resetTimer,
+		sanitizeDurationMinutes,
+		setTimerDuration,
+		shouldFinishTurn,
+		startTimer
+	} from '../state';
 	import { onMount } from 'svelte';
 
 	type Props = {
@@ -9,28 +16,29 @@
 	};
 
 	let { onTimerConfigUpdated, onTurnFinished }: Props = $props();
+	let finishedTurnUpdatedAt: number | undefined;
 
 	onMount(() => {
 		const intervalId = window.setInterval(() => {
-			if (!$timerConfig.running) {
+			const now = Date.now();
+			if (!shouldFinishTurn($timerState, $isMainPeer, now)) {
 				return;
 			}
 
-			if ($timer > 0) {
-				$timer -= 1;
+			if (finishedTurnUpdatedAt === $timerState.updatedAt) {
+				return;
 			}
 
-			if ($timer === 0) {
-				onTurnFinished?.();
-				$timerConfig.running = false;
-			}
+			finishedTurnUpdatedAt = $timerState.updatedAt;
+			onTurnFinished?.();
 		}, 1000);
 
 		return () => window.clearInterval(intervalId);
 	});
 
 	async function handleToggleClick() {
-		$timerConfig.running = !$timerConfig.running;
+		const now = Date.now();
+		timerState.update((state) => (state.running ? pauseTimer(state, now) : startTimer(state, now)));
 		if ('Notification' in window) {
 			await Notification.requestPermission();
 		}
@@ -38,26 +46,23 @@
 	}
 
 	function handleResetClick() {
-		$timerConfig.running = false;
-		$timer = $timerConfig.initialSeconds;
+		timerState.update((state) => resetTimer(state, Date.now()));
 		onTimerConfigUpdated?.();
 	}
 
 	function handleMinutesInput(event: Event) {
 		const input = event.currentTarget as HTMLInputElement;
 		const minutes = sanitizeDurationMinutes(input.value);
-		const seconds = secondsFromMinutes(minutes);
 
 		input.value = String(minutes);
-		$timer = seconds;
-		$timerConfig.initialSeconds = seconds;
+		timerState.update((state) => setTimerDuration(state, minutes, Date.now()));
 		onTimerConfigUpdated?.();
 	}
 </script>
 
 <div class="timer">
 	<div class="timer-time">
-		{#if !$timerConfig.running}
+		{#if !$timerState.running}
 			<input
 				class="timer-minutes-input"
 				type="number"
@@ -76,8 +81,8 @@
 			class="timer-button"
 			type="button"
 			onclick={handleToggleClick}
-			aria-label={$timerConfig.running ? 'Pause timer' : 'Start timer'}
-			>{$timerConfig.running ? 'Pause' : 'Start'}</button
+			aria-label={$timerState.running ? 'Pause timer' : 'Start timer'}
+			>{$timerState.running ? 'Pause' : 'Start'}</button
 		>
 		<button class="timer-button" type="button" onclick={handleResetClick} aria-label="Stop timer"
 			>Reset</button

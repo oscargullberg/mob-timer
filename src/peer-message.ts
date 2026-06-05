@@ -1,5 +1,12 @@
-import { normalizeMobsters, normalizeTimerConfig } from './state.ts';
-import type { Mobster, TimerConfig } from './state.ts';
+import { normalizeAppStateVersion, normalizeMobsters, normalizeSyncedTimerState } from './state.ts';
+import type { AppStateVersion, Mobster, TimerState } from './state.ts';
+
+type AppStatePayload = {
+	mobsters: Mobster[];
+	timerState: TimerState;
+	version: AppStateVersion;
+	peerId: string;
+};
 
 export type PeerMessage =
 	| {
@@ -10,12 +17,11 @@ export type PeerMessage =
 	  }
 	| {
 			type: 'SET_APP_STATE';
-			payload: {
-				mobsters: Mobster[];
-				timerConfig: TimerConfig;
-				timer: number;
-				peerId: string;
-			};
+			payload: AppStatePayload;
+	  }
+	| {
+			type: 'PROPOSE_APP_STATE';
+			payload: AppStatePayload;
 	  }
 	| {
 			type: 'SET_PEERLIST';
@@ -44,7 +50,9 @@ export function parsePeerMessage(data: unknown): PeerMessage | undefined {
 		case 'INIT':
 			return parseInitMessage(message.payload);
 		case 'SET_APP_STATE':
-			return parseSetAppStateMessage(message.payload);
+			return parseAppStateMessage('SET_APP_STATE', message.payload);
+		case 'PROPOSE_APP_STATE':
+			return parseAppStateMessage('PROPOSE_APP_STATE', message.payload);
 		case 'SET_PEERLIST':
 			return parseSetPeerListMessage(message.payload);
 		default:
@@ -65,20 +73,25 @@ function parseInitMessage(payload: Record<string, unknown>): PeerMessage | undef
 	};
 }
 
-function parseSetAppStateMessage(payload: Record<string, unknown>): PeerMessage | undefined {
+function parseAppStateMessage(
+	type: 'SET_APP_STATE' | 'PROPOSE_APP_STATE',
+	payload: Record<string, unknown>
+): PeerMessage | undefined {
 	if (typeof payload.peerId !== 'string' || !payload.peerId.trim()) {
 		return undefined;
 	}
 
-	const timerConfig = normalizeTimerConfig(payload.timerConfig);
-	const timer = normalizeTimerValue(payload.timer, timerConfig.initialSeconds);
+	const version = normalizeAppStateVersion(payload.version);
+	if (!version) {
+		return undefined;
+	}
 
 	return {
-		type: 'SET_APP_STATE',
+		type,
 		payload: {
 			mobsters: normalizeMobsters(payload.mobsters),
-			timerConfig,
-			timer,
+			timerState: normalizeSyncedTimerState(payload.timerState),
+			version,
 			peerId: payload.peerId
 		}
 	};
@@ -97,14 +110,6 @@ function parseSetPeerListMessage(payload: Record<string, unknown>): PeerMessage 
 			peerIds
 		}
 	};
-}
-
-function normalizeTimerValue(value: unknown, fallback: number): number {
-	if (typeof value !== 'number' || !Number.isFinite(value)) {
-		return fallback;
-	}
-
-	return Math.max(0, Math.floor(value));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

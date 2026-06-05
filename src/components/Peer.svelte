@@ -1,10 +1,15 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
-	import { mobsters, timerConfig, timer, broadcast } from '../stores';
+	import { broadcast, isMainPeer, mobsters, timerState } from '../stores';
 	import { parsePeerMessage } from '../peer-message';
 	import { Peer } from 'peerjs';
 	import type { DataConnection } from 'peerjs';
-	import type { Mobster, TimerConfig } from '../state';
+	import {
+		isNewerAppStateVersion,
+		isSameOrNewerAppStateVersion,
+		snapshotTimerState
+	} from '../state';
+	import type { AppStateVersion, Mobster, TimerState } from '../state';
 
 	type Props = {
 		roomId: string;
@@ -18,10 +23,16 @@
 	let isMainNode = $state(false);
 	let peerList = $state(new Set<string>());
 	let connections = $state<Record<string, DataConnection>>({});
+	let currentStateVersion = $state<AppStateVersion>({ updatedAt: 0, originPeerId: '' });
 
 	$effect(() => {
-		$broadcast;
-		untrack(() => broadcastState($mobsters, $timerConfig));
+		const change = $broadcast;
+		untrack(() => {
+			const version = createLocalVersion(change.lastChange);
+			if (version) {
+				publishState($mobsters, $timerState, version);
+			}
+		});
 	});
 
 	onMount(() => {
@@ -38,6 +49,7 @@
 
 		return () => {
 			window.removeEventListener('beforeunload', handleBeforeUnload);
+			$isMainPeer = false;
 			peer?.destroy();
 		};
 	});
@@ -45,6 +57,10 @@
 	async function setupPeer() {
 		peer = await createPeer();
 		isMainNode = peer.id === peerRoomId;
+		$isMainPeer = isMainNode;
+		if (isMainNode) {
+			currentStateVersion = { ...currentStateVersion, originPeerId: peer.id };
+		}
 
 		if (isMainNode) {
 			setupMainPeer(peer);
@@ -83,12 +99,28 @@
 				}
 
 				switch (msg.type) {
-					case 'SET_APP_STATE':
-						$mobsters = msg.payload.mobsters;
-						$timerConfig = msg.payload.timerConfig;
-						$timer = msg.payload.timer;
+					case 'PROPOSE_APP_STATE':
+						if (conn.peer !== msg.payload.peerId) {
+							return;
+						}
 
-						broadcastState($mobsters, $timerConfig, [msg.payload.peerId]);
+						if (!isNewerAppStateVersion(msg.payload.version, currentStateVersion)) {
+							conn.send(
+								JSON.stringify(
+									createSetAppStateMessage($mobsters, $timerState, currentStateVersion)
+								)
+							);
+							return;
+						}
+
+						$mobsters = msg.payload.mobsters;
+						$timerState = {
+							...msg.payload.timerState,
+							updatedAt: Date.now()
+						};
+						currentStateVersion = msg.payload.version;
+
+						broadcastState($mobsters, $timerState, currentStateVersion);
 						break;
 					case 'INIT':
 						const { peerId } = msg.payload;
@@ -101,8 +133,8 @@
 								type: 'SET_APP_STATE',
 								payload: {
 									mobsters: $mobsters,
-									timerConfig: $timerConfig,
-									timer: $timer,
+									timerState: snapshotTimerState($timerState),
+									version: currentStateVersion,
 									peerId: mainPeer.id
 								}
 							})
@@ -135,11 +167,23 @@
 
 			switch (msg.type) {
 				case 'SET_APP_STATE':
+					if (conn.peer !== peerRoomId || msg.payload.peerId !== peerRoomId) {
+						return;
+					}
+
+					if (!isSameOrNewerAppStateVersion(msg.payload.version, currentStateVersion)) {
+						return;
+					}
+
 					$mobsters = msg.payload.mobsters;
-					$timerConfig = msg.payload.timerConfig;
-					$timer = msg.payload.timer;
+					$timerState = msg.payload.timerState;
+					currentStateVersion = msg.payload.version;
 					break;
 				case 'SET_PEERLIST':
+					if (conn.peer !== peerRoomId) {
+						return;
+					}
+
 					peerList = new Set(msg.payload.peerIds);
 					console.debug('Set peerList', peerList);
 					break;
@@ -165,23 +209,44 @@
 		}
 	}
 
-	function broadcastState(
+	function publishState(mobsters: Mobster[], timerState: TimerState, version: AppStateVersion) {
+		if (isMainNode) {
+			currentStateVersion = version;
+			broadcastState(mobsters, timerState, version);
+		} else {
+			currentStateVersion = version;
+			sendStateToMainPeer(mobsters, timerState, version);
+		}
+	}
+
+	function sendStateToMainPeer(
 		mobsters: Mobster[],
-		timerConfig: TimerConfig,
-		excludePeerIds: string[] = []
+		timerState: TimerState,
+		version: AppStateVersion
 	) {
 		if (!peer?.open) {
 			return;
 		}
 
-		const excludedPeerIds = [...excludePeerIds, peer.id];
-		const msg = {
-			type: 'SET_APP_STATE',
-			payload: { mobsters, timerConfig, peerId: peer.id, timer: $timer }
-		};
+		const conn = connections[peerRoomId];
+		if (!conn?.open) {
+			return;
+		}
+
+		conn.send(
+			JSON.stringify(createAppStateMessage('PROPOSE_APP_STATE', mobsters, timerState, version))
+		);
+	}
+
+	function broadcastState(mobsters: Mobster[], timerState: TimerState, version: AppStateVersion) {
+		if (!peer?.open) {
+			return;
+		}
+
+		const msg = createSetAppStateMessage(mobsters, timerState, version);
 
 		for (let peerId of peerList.keys()) {
-			if (excludedPeerIds.includes(peerId)) {
+			if (peerId === peer.id) {
 				continue;
 			}
 
@@ -196,6 +261,42 @@
 				});
 			}
 		}
+	}
+
+	function createSetAppStateMessage(
+		mobsters: Mobster[],
+		timerState: TimerState,
+		version: AppStateVersion
+	) {
+		return createAppStateMessage('SET_APP_STATE', mobsters, timerState, version);
+	}
+
+	function createAppStateMessage(
+		type: 'SET_APP_STATE' | 'PROPOSE_APP_STATE',
+		mobsters: Mobster[],
+		timerState: TimerState,
+		version: AppStateVersion
+	) {
+		return {
+			type,
+			payload: {
+				mobsters,
+				timerState: snapshotTimerState(timerState),
+				version,
+				peerId: peer?.id ?? ''
+			}
+		};
+	}
+
+	function createLocalVersion(requestedAt: number): AppStateVersion | undefined {
+		if (!peer?.id || !requestedAt) {
+			return undefined;
+		}
+
+		return {
+			updatedAt: Math.max(requestedAt, Date.now(), currentStateVersion.updatedAt + 1),
+			originPeerId: peer.id
+		};
 	}
 
 	function onConnectionClose(connection: DataConnection) {
@@ -220,7 +321,10 @@
 			mainPeerCandidate.once('open', (id) => {
 				peer?.destroy();
 				connections = {};
+				isMainNode = true;
+				$isMainPeer = true;
 				peer = setupMainPeer(mainPeerCandidate);
+				broadcastState($mobsters, $timerState, currentStateVersion);
 				console.debug('Taking over main');
 			});
 		}
