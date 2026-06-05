@@ -24,6 +24,10 @@ export type PeerMessage =
 			payload: AppStatePayload;
 	  }
 	| {
+			type: 'GOSSIP_APP_STATE';
+			payload: AppStatePayload;
+	  }
+	| {
 			type: 'SET_PEERLIST';
 			payload: {
 				peerIds: string[];
@@ -53,6 +57,8 @@ export function parsePeerMessage(data: unknown): PeerMessage | undefined {
 			return parseAppStateMessage('SET_APP_STATE', message.payload);
 		case 'PROPOSE_APP_STATE':
 			return parseAppStateMessage('PROPOSE_APP_STATE', message.payload);
+		case 'GOSSIP_APP_STATE':
+			return parseAppStateMessage('GOSSIP_APP_STATE', message.payload);
 		case 'SET_PEERLIST':
 			return parseSetPeerListMessage(message.payload);
 		default:
@@ -74,7 +80,7 @@ function parseInitMessage(payload: Record<string, unknown>): PeerMessage | undef
 }
 
 function parseAppStateMessage(
-	type: 'SET_APP_STATE' | 'PROPOSE_APP_STATE',
+	type: 'SET_APP_STATE' | 'PROPOSE_APP_STATE' | 'GOSSIP_APP_STATE',
 	payload: Record<string, unknown>
 ): PeerMessage | undefined {
 	if (typeof payload.peerId !== 'string' || !payload.peerId.trim()) {

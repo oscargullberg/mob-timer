@@ -122,6 +122,23 @@
 
 						broadcastState($mobsters, $timerState, currentStateVersion);
 						break;
+					case 'GOSSIP_APP_STATE':
+						if (conn.peer !== msg.payload.peerId) {
+							return;
+						}
+
+						if (!isNewerAppStateVersion(msg.payload.version, currentStateVersion)) {
+							return;
+						}
+
+						$mobsters = msg.payload.mobsters;
+						$timerState = {
+							...msg.payload.timerState,
+							updatedAt: Date.now()
+						};
+						currentStateVersion = msg.payload.version;
+						broadcastState($mobsters, $timerState, currentStateVersion);
+						break;
 					case 'INIT':
 						const { peerId } = msg.payload;
 						console.debug(`Peer with peer id ${peerId} connected.`);
@@ -158,38 +175,61 @@
 			});
 			conn.send(msg);
 		});
-		conn.on('data', (data) => {
-			const msg = parsePeerMessage(data);
-			if (!msg) {
-				return;
-			}
-			console.debug('Received msg', msg);
-
-			switch (msg.type) {
-				case 'SET_APP_STATE':
-					if (conn.peer !== peerRoomId || msg.payload.peerId !== peerRoomId) {
-						return;
-					}
-
-					if (!isSameOrNewerAppStateVersion(msg.payload.version, currentStateVersion)) {
-						return;
-					}
-
-					$mobsters = msg.payload.mobsters;
-					$timerState = msg.payload.timerState;
-					currentStateVersion = msg.payload.version;
-					break;
-				case 'SET_PEERLIST':
-					if (conn.peer !== peerRoomId) {
-						return;
-					}
-
-					peerList = new Set(msg.payload.peerIds);
-					console.debug('Set peerList', peerList);
-					break;
-			}
-		});
+		conn.on('data', (data) => handleRegularPeerData(conn, data));
 		conn.on('close', () => onConnectionClose(conn));
+
+		regularPeer.on('connection', (conn) => {
+			connections[conn.peer] = conn;
+			conn.on('data', (data) => handleRegularPeerData(conn, data));
+			conn.on('close', () => {
+				delete connections[conn.peer];
+			});
+		});
+	}
+
+	function handleRegularPeerData(conn: DataConnection, data: unknown) {
+		const msg = parsePeerMessage(data);
+		if (!msg) {
+			return;
+		}
+		console.debug('Received msg', msg);
+
+		switch (msg.type) {
+			case 'SET_APP_STATE':
+				if (conn.peer !== peerRoomId || msg.payload.peerId !== peerRoomId) {
+					return;
+				}
+
+				if (!isSameOrNewerAppStateVersion(msg.payload.version, currentStateVersion)) {
+					return;
+				}
+
+				$mobsters = msg.payload.mobsters;
+				$timerState = msg.payload.timerState;
+				currentStateVersion = msg.payload.version;
+				break;
+			case 'GOSSIP_APP_STATE':
+				if (conn.peer !== msg.payload.peerId) {
+					return;
+				}
+
+				if (!isNewerAppStateVersion(msg.payload.version, currentStateVersion)) {
+					return;
+				}
+
+				$mobsters = msg.payload.mobsters;
+				$timerState = msg.payload.timerState;
+				currentStateVersion = msg.payload.version;
+				break;
+			case 'SET_PEERLIST':
+				if (conn.peer !== peerRoomId) {
+					return;
+				}
+
+				peerList = new Set(msg.payload.peerIds);
+				console.debug('Set peerList', peerList);
+				break;
+		}
 	}
 
 	function broadcastPeerList() {
@@ -216,6 +256,7 @@
 		} else {
 			currentStateVersion = version;
 			sendStateToMainPeer(mobsters, timerState, version);
+			gossipStateToPeers(mobsters, timerState, version);
 		}
 	}
 
@@ -236,6 +277,34 @@
 		conn.send(
 			JSON.stringify(createAppStateMessage('PROPOSE_APP_STATE', mobsters, timerState, version))
 		);
+	}
+
+	function gossipStateToPeers(
+		mobsters: Mobster[],
+		timerState: TimerState,
+		version: AppStateVersion
+	) {
+		if (!peer?.open) {
+			return;
+		}
+
+		const msg = createAppStateMessage('GOSSIP_APP_STATE', mobsters, timerState, version);
+
+		for (let peerId of peerList.keys()) {
+			if (peerId === peer.id || peerId === peerRoomId) {
+				continue;
+			}
+
+			const conn = connections[peerId];
+			if (conn?.open) {
+				conn.send(JSON.stringify(msg));
+			} else {
+				const newConn = peer.connect(peerId, { reliable: true }).on('open', () => {
+					connections[peerId] = newConn;
+					newConn.send(JSON.stringify(msg));
+				});
+			}
+		}
 	}
 
 	function broadcastState(mobsters: Mobster[], timerState: TimerState, version: AppStateVersion) {
@@ -272,7 +341,7 @@
 	}
 
 	function createAppStateMessage(
-		type: 'SET_APP_STATE' | 'PROPOSE_APP_STATE',
+		type: 'SET_APP_STATE' | 'PROPOSE_APP_STATE' | 'GOSSIP_APP_STATE',
 		mobsters: Mobster[],
 		timerState: TimerState,
 		version: AppStateVersion

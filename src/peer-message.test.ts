@@ -81,6 +81,41 @@ describe('parsePeerMessage', () => {
 		);
 	});
 
+	it('normalizes gossiped app state messages before applying them', () => {
+		assert.deepEqual(
+			parsePeerMessage(
+				JSON.stringify({
+					type: 'GOSSIP_APP_STATE',
+					payload: {
+						mobsters: [{ id: 'a', name: 'Ada', active: true }],
+						timerState: {
+							running: true,
+							initialSeconds: 600,
+							remainingSeconds: 500,
+							updatedAt: 1000
+						},
+						version: { updatedAt: 2000, originPeerId: 'peer-a' },
+						peerId: 'peer-a'
+					}
+				})
+			),
+			{
+				type: 'GOSSIP_APP_STATE',
+				payload: {
+					mobsters: [{ id: 'a', name: 'Ada', active: true }],
+					timerState: {
+						running: true,
+						initialSeconds: 600,
+						remainingSeconds: 500,
+						updatedAt: 1000
+					},
+					version: { updatedAt: 2000, originPeerId: 'peer-a' },
+					peerId: 'peer-a'
+				}
+			}
+		);
+	});
+
 	it('rejects app state messages without a valid version', () => {
 		assert.equal(
 			parsePeerMessage(
