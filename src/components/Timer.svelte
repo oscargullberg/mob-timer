@@ -128,13 +128,21 @@
 		transform: translateY(1px);
 	}
 	.timer-minutes-input {
-		width: 2.2ch;
+		width: 2.4ch;
 		font: inherit;
+		line-height: inherit;
 		color: var(--header-text-color);
 		background: transparent;
+		appearance: textfield;
 		outline: none;
 		border: none;
+		padding: 0;
 		text-align: right;
+	}
+	.timer-minutes-input::-webkit-inner-spin-button,
+	.timer-minutes-input::-webkit-outer-spin-button {
+		margin: 0;
+		appearance: none;
 	}
 	.timer-minutes-input:focus {
 		border-radius: 4px;
