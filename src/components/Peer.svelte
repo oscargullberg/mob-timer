@@ -1,44 +1,50 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { mobsters, timerConfig, timer, broadcast } from '../stores';
-	import { page } from '$app/stores';
+	import { parsePeerMessage } from '../peer-message';
 	import { Peer } from 'peerjs';
 	import type { DataConnection } from 'peerjs';
+	import type { Mobster, TimerConfig } from '../state';
 
-	type Message = {
-		type: string;
-		payload: any;
+	type Props = {
+		roomId: string;
 	};
 
-	const cleanedPathParam = $page.params['roomId'].replace(/[^a-z0-9 -]/gi, '');
-	const roomId = `${cleanedPathParam}-mob-bois-2k`;
+	let { roomId: routeRoomId }: Props = $props();
+	const cleanedPathParam = $derived(routeRoomId.replace(/[^a-z0-9 -]/gi, ''));
+	const peerRoomId = $derived(`${cleanedPathParam}-mob-bois-2k`);
 
-	let peer: Peer;
-	let isMainNode = false;
-	let peerList: Set<string> = new Set();
-	let connections: { [key: string]: DataConnection } = {};
+	let peer: Peer | undefined;
+	let isMainNode = $state(false);
+	let peerList = $state(new Set<string>());
+	let connections = $state<Record<string, DataConnection>>({});
 
-	$: handleBroadcastStateUpdate($broadcast);
+	$effect(() => {
+		$broadcast;
+		untrack(() => broadcastState($mobsters, $timerConfig));
+	});
 
-	onMount(async () => {
-		await setupPeer();
+	onMount(() => {
+		void setupPeer();
 
-		window.addEventListener('beforeunload', (e) => {
-			e.preventDefault();
+		function handleBeforeUnload() {
 			if (isMainNode) {
 				broadcastPeerList();
 			}
 			peer?.destroy();
-		});
-	});
+		}
 
-	function handleBroadcastStateUpdate(_: any) {
-		broadcastState($mobsters, $timerConfig);
-	}
+		window.addEventListener('beforeunload', handleBeforeUnload);
+
+		return () => {
+			window.removeEventListener('beforeunload', handleBeforeUnload);
+			peer?.destroy();
+		};
+	});
 
 	async function setupPeer() {
 		peer = await createPeer();
-		isMainNode = peer.id === roomId;
+		isMainNode = peer.id === peerRoomId;
 
 		if (isMainNode) {
 			setupMainPeer(peer);
@@ -49,9 +55,9 @@
 
 	function createPeer(): Promise<Peer> {
 		return new Promise((resolve, reject) => {
-			let mainPeerCandidate = new Peer(roomId);
+			let mainPeerCandidate = new Peer(peerRoomId);
 			mainPeerCandidate.once('error', (err) => {
-				if ((err as any)?.type == 'unavailable-id') {
+				if (isPeerUnavailableError(err)) {
 					console.debug('Main already exists, creating new peer');
 					const newPeer = new Peer();
 					newPeer.once('open', () => {
@@ -68,22 +74,24 @@
 	}
 
 	function setupMainPeer(mainPeer: Peer) {
-		peerList.add(roomId);
+		peerList.add(peerRoomId);
 		mainPeer.on('connection', (conn) => {
 			conn.on('data', (data) => {
-				const msg = JSON.parse(data as string);
-				const { type, payload } = msg;
+				const msg = parsePeerMessage(data);
+				if (!msg) {
+					return;
+				}
 
-				switch (type) {
+				switch (msg.type) {
 					case 'SET_APP_STATE':
-						$mobsters = payload.mobsters;
-						$timerConfig = payload.timerConfig;
-						$timer = payload.timer;
+						$mobsters = msg.payload.mobsters;
+						$timerConfig = msg.payload.timerConfig;
+						$timer = msg.payload.timer;
 
-						broadcastState($mobsters, $timerConfig, [payload.peerId]);
+						broadcastState($mobsters, $timerConfig, [msg.payload.peerId]);
 						break;
 					case 'INIT':
-						const { peerId } = payload;
+						const { peerId } = msg.payload;
 						console.debug(`Peer with peer id ${peerId} connected.`);
 						connections[peerId] = conn;
 						peerList.add(peerId);
@@ -107,9 +115,9 @@
 	}
 
 	function setupRegularPeer(regularPeer: Peer) {
-		const conn = regularPeer.connect(roomId, { reliable: true });
+		const conn = regularPeer.connect(peerRoomId, { reliable: true });
 		conn.on('open', () => {
-			connections[roomId] = conn;
+			connections[peerRoomId] = conn;
 			const msg = JSON.stringify({
 				type: 'INIT',
 				payload: {
@@ -119,18 +127,20 @@
 			conn.send(msg);
 		});
 		conn.on('data', (data) => {
-			const msg = JSON.parse(data as string);
-			const { type, payload } = msg;
+			const msg = parsePeerMessage(data);
+			if (!msg) {
+				return;
+			}
 			console.debug('Received msg', msg);
 
-			switch (type) {
+			switch (msg.type) {
 				case 'SET_APP_STATE':
-					$mobsters = payload.mobsters;
-					$timerConfig = payload.timerConfig;
-					$timer = payload.timer;
+					$mobsters = msg.payload.mobsters;
+					$timerConfig = msg.payload.timerConfig;
+					$timer = msg.payload.timer;
 					break;
 				case 'SET_PEERLIST':
-					peerList = new Set(payload.peerIds);
+					peerList = new Set(msg.payload.peerIds);
 					console.debug('Set peerList', peerList);
 					break;
 			}
@@ -139,24 +149,33 @@
 	}
 
 	function broadcastPeerList() {
+		if (!peer) {
+			return;
+		}
+		const currentPeerId = peer.id;
+
 		const msg = {
 			type: 'SET_PEERLIST',
 			payload: { peerIds: Array.from(peerList) }
 		};
 		for (let conn of Object.entries(connections)
-			.filter(([peerId, _]) => peerId != peer.id)
+			.filter(([peerId, _]) => peerId != currentPeerId)
 			.map(([_, conn]) => conn)) {
 			conn.send(JSON.stringify(msg));
 		}
 	}
 
-	function broadcastState(mobsters: any, timerConfig: any, excludePeerIds: string[] = []) {
+	function broadcastState(
+		mobsters: Mobster[],
+		timerConfig: TimerConfig,
+		excludePeerIds: string[] = []
+	) {
 		if (!peer?.open) {
 			return;
 		}
 
 		const excludedPeerIds = [...excludePeerIds, peer.id];
-		const msg: Message = {
+		const msg = {
 			type: 'SET_APP_STATE',
 			payload: { mobsters, timerConfig, peerId: peer.id, timer: $timer }
 		};
@@ -192,18 +211,24 @@
 			}
 			broadcastPeerList();
 		} else {
-			let mainPeerCandidate = new Peer(roomId);
+			let mainPeerCandidate = new Peer(peerRoomId);
 			mainPeerCandidate.once('error', (err) => {
-				if ((err as any)?.type == 'unavailable-id') {
+				if (isPeerUnavailableError(err)) {
 					console.debug('Main node id is unavailable. Not fast enough');
 				}
 			});
 			mainPeerCandidate.once('open', (id) => {
-				peer.destroy();
+				peer?.destroy();
 				connections = {};
 				peer = setupMainPeer(mainPeerCandidate);
 				console.debug('Taking over main');
 			});
 		}
+	}
+
+	function isPeerUnavailableError(err: unknown) {
+		return (
+			typeof err === 'object' && err !== null && 'type' in err && err.type === 'unavailable-id'
+		);
 	}
 </script>

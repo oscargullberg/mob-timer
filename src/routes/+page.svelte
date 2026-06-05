@@ -1,12 +1,16 @@
-<script>
+<script lang="ts">
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { base } from '$app/paths';
+	import { createRoomId } from '../state';
 
-	var redirect = sessionStorage.redirect;
-	delete sessionStorage.redirect;
-	const roomId = Date.now().toString(36);
-	const to = redirect && redirect != location.pathname ? redirect : `${base}/${roomId}`;
+	onMount(() => {
+		const redirect = sessionStorage.redirect;
+		delete sessionStorage.redirect;
 
-	onMount(async () => goto(to));
+		const roomId = createRoomId();
+		const to = redirect && redirect !== location.pathname ? redirect : `${base}/${roomId}`;
+
+		void goto(to);
+	});
 </script>

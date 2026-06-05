@@ -1,5 +1,4 @@
 import adapter from '@sveltejs/adapter-static';
-import preprocess from 'svelte-preprocess';
 
 const prod = process.env.NODE_ENV === 'production';
 
@@ -9,8 +8,6 @@ const adapterToUse = prod
 	: adapter();
 
 const config = {
-	preprocess: preprocess(),
-	adapter: adapter(),
 	kit: {
 		adapter: adapterToUse,
 		paths: {

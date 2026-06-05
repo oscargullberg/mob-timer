@@ -1,66 +1,86 @@
 <script lang="ts">
 	import { timer, timerConfig, remaining } from '../stores';
-	import { createEventDispatcher } from 'svelte';
+	import { secondsFromMinutes, sanitizeDurationMinutes } from '../state';
+	import { onMount } from 'svelte';
 
-	const dispatch = createEventDispatcher();
+	type Props = {
+		onTimerConfigUpdated?: () => void;
+		onTurnFinished?: () => void;
+	};
 
-	let hover = false;
-	$: toggleText = $timerConfig.running
-		? '<span aria-label="pause timer">⏸️</span>'
-		: '<span aria-label="start timer">▶️</span>';
+	let { onTimerConfigUpdated, onTurnFinished }: Props = $props();
 
-	setInterval(() => {
-		if ($timerConfig.running) {
+	onMount(() => {
+		const intervalId = window.setInterval(() => {
+			if (!$timerConfig.running) {
+				return;
+			}
+
 			if ($timer > 0) {
 				$timer -= 1;
 			}
+
 			if ($timer === 0) {
-				dispatch('turnFinished');
+				onTurnFinished?.();
 				$timerConfig.running = false;
 			}
-		}
-	}, 1000);
+		}, 1000);
+
+		return () => window.clearInterval(intervalId);
+	});
 
 	async function handleToggleClick() {
 		$timerConfig.running = !$timerConfig.running;
-		await Notification?.requestPermission();
-		dispatch('timerConfigUpdated');
+		if ('Notification' in window) {
+			await Notification.requestPermission();
+		}
+		onTimerConfigUpdated?.();
 	}
+
 	function handleResetClick() {
 		$timerConfig.running = false;
 		$timer = $timerConfig.initialSeconds;
-		dispatch('timerConfigUpdated');
+		onTimerConfigUpdated?.();
+	}
+
+	function handleMinutesInput(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const minutes = sanitizeDurationMinutes(input.value);
+		const seconds = secondsFromMinutes(minutes);
+
+		input.value = String(minutes);
+		$timer = seconds;
+		$timerConfig.initialSeconds = seconds;
+		onTimerConfigUpdated?.();
 	}
 </script>
 
 <div class="timer">
-	<!-- svelte-ignore a11y-mouse-events-have-key-events -->
-	<div class="timer-time" on:mouseover={() => (hover = true)} on:mouseleave={() => (hover = false)}>
-		{#if !$timerConfig.running && hover}
+	<div class="timer-time">
+		{#if !$timerConfig.running}
 			<input
+				class="timer-minutes-input"
 				type="number"
 				value={$remaining.minutes}
 				min="1"
 				max="99"
-				on:input={(e) => {
-					// @ts-ignore
-					const minutes = e.target.value;
-					const seconds = minutes * 60;
-					$timer = seconds;
-					$timerConfig.initialSeconds = seconds;
-					dispatch('timerConfigUpdated');
-				}}
+				aria-label="Turn duration in minutes"
+				oninput={handleMinutesInput}
 			/>
 		{:else}
 			<span>{$remaining.minutes}</span>
 		{/if}:<span>{$remaining.seconds}</span>
 	</div>
-	<div>
-		<button class="timer-button" type="button" on:click={handleToggleClick}
-			>{@html toggleText}</button
+	<div class="timer-actions">
+		<button
+			class="timer-button"
+			type="button"
+			onclick={handleToggleClick}
+			aria-label={$timerConfig.running ? 'Pause timer' : 'Start timer'}
+			>{$timerConfig.running ? 'Pause' : 'Start'}</button
 		>
-		<button class="timer-button" type="button" on:click={handleResetClick} aria-label="stop timer"
-			>⏹</button
+		<button class="timer-button" type="button" onclick={handleResetClick} aria-label="Stop timer"
+			>Reset</button
 		>
 	</div>
 </div>
@@ -68,28 +88,62 @@
 <style>
 	.timer {
 		display: flex;
-		font-size: 2rem;
+		align-items: center;
+		gap: 0.75rem;
 	}
 	.timer-time {
 		display: flex;
+		align-items: center;
+		min-width: 8ch;
+		font-variant-numeric: tabular-nums;
+		font-size: clamp(1.75rem, 4vw, 2.75rem);
+		font-weight: 800;
+		line-height: 1;
+		letter-spacing: 0;
+	}
+	.timer-actions {
+		display: flex;
+		gap: 0.5rem;
 	}
 	.timer-button {
-		font-size: 2rem;
-		opacity: 0.85;
-		transition: opacity 0.5s ease-out;
+		min-width: 4.5rem;
+		border-radius: 6px;
+		background: rgba(255, 255, 255, 0.12);
+		padding: 0.55rem 0.75rem;
+		font-size: 0.9rem;
+		font-weight: 800;
+		transition:
+			background-color 0.2s ease-out,
+			transform 0.2s ease-out;
 	}
 	.timer-button:hover {
-		opacity: 1;
+		background: rgba(255, 255, 255, 0.2);
 	}
-	.timer > * {
-		margin-left: var(--header-item-spacing);
+	.timer-button:active {
+		transform: translateY(1px);
 	}
-	input[type='number'] {
-		opacity: 0.9;
-		font-size: 2rem;
+	.timer-minutes-input {
+		width: 2.2ch;
+		font: inherit;
 		color: var(--header-text-color);
-		background-color: var(--header-background-color);
+		background: transparent;
 		outline: none;
 		border: none;
+		text-align: right;
+	}
+	.timer-minutes-input:focus {
+		border-radius: 4px;
+		box-shadow: 0 0 0 2px rgba(91, 141, 239, 0.8);
+	}
+
+	@media (max-width: 640px) {
+		.timer {
+			width: 100%;
+			justify-content: space-between;
+		}
+		.timer-actions {
+			flex-wrap: wrap;
+			justify-content: flex-end;
+		}
 	}
 </style>
