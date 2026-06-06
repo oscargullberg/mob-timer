@@ -1,24 +1,34 @@
-# Mob timer
+# Mob Timer
 
-Real time peer to peer (WebRTC) mob programming timer built with [SvelteKit](https://kit.svelte.dev/) and [peer.js](https://peerjs.com/).
+A shared mob programming timer built with SvelteKit and PeerJS.
+
+Mob Timer creates a room link that teammates can open together. Timer state and the mobster list sync between browsers over WebRTC, with local storage used to restore state on refresh.
 
 ## Demo
 
 https://oscargullberg.github.io/mob-timer/
 
-## Run
+## Development
 
-1. `npm install`
-2. `npm run dev`
+Requires Node.js 24
 
-## Verify
+```sh
+npm install
+npm run dev
+```
 
-- `npm test`
-- `npm run check`
-- `npm run lint`
-- `npm run build`
-- `npm audit --audit-level=moderate`
+## Checks
 
-## Notes
+```sh
+npm test
+npm run check
+npm run lint
+npm run build
+npm audit --audit-level=moderate
+```
 
-They say time is money 💸
+## Deploy
+
+```sh
+npm run deploy
+```
