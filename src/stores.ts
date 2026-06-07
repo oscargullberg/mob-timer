@@ -3,6 +3,7 @@ import { writable, derived, readable } from 'svelte/store';
 import {
 	createDefaultTimerState,
 	formatRemaining,
+	getTimerProgress,
 	getTimerRemainingSeconds,
 	normalizeMobsters,
 	parseStoredMobsters,
@@ -45,6 +46,9 @@ const currentTime = readable(Date.now(), (set) => {
 export const timerState = writable<TimerState>(initialTimerState);
 export const timer = derived([timerState, currentTime], ([$timerState, $currentTime]) =>
 	getTimerRemainingSeconds($timerState, $currentTime)
+);
+export const timerProgress = derived([timerState, timer], ([$timerState, $timer]) =>
+	getTimerProgress({ initialSeconds: $timerState.initialSeconds, remainingSeconds: $timer })
 );
 export const mobsters = createMobsterStore(initialMobsters);
 export const broadcast = writable<BroadcastState>({

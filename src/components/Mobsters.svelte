@@ -72,50 +72,55 @@
 	.mobsters {
 		display: flex;
 		flex-direction: column;
-		width: min(100%, 28rem);
-		background-color: #ffffff;
-		border: 1px solid rgba(17, 24, 39, 0.08);
-		border-radius: 8px;
-		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.24);
-		padding: 1.5rem;
-		color: #171717;
+		width: min(100%, 22rem);
+		color: #f4f6ee;
 	}
 	.mobsters-header {
-		font-size: 1.35rem;
-		font-weight: 800;
-		margin-bottom: 1.25rem;
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
 	}
 	.mobsters-add {
 		display: grid;
 		grid-template-columns: 1fr auto;
 		gap: 0.5rem;
-		margin-top: 1.25rem;
+		margin-top: 0.75rem;
 	}
 	.mobsters-add-input {
 		width: 100%;
 		min-width: 0;
-		border: 1px solid #d4d7dd;
+		border: 1px solid rgba(244, 246, 238, 0.28);
 		border-radius: 6px;
+		background: rgba(255, 255, 255, 0.045);
 		padding: 0.65rem 0.75rem;
+		color: #f4f6ee;
 		font: inherit;
 	}
+	.mobsters-add-input::placeholder {
+		color: rgba(244, 246, 238, 0.58);
+	}
 	.mobsters-add-input:focus {
-		border-color: #5b8def;
+		border-color: #a9cc45;
 		outline: none;
-		box-shadow: 0 0 0 3px rgba(91, 141, 239, 0.18);
+		box-shadow: 0 0 0 3px rgba(169, 204, 69, 0.18);
 	}
 	.mobsters-add-button {
-		color: var(--button-text);
-		background-color: #171717;
+		color: #f4f6ee;
+		background-color: #111;
+		border: 2px solid rgba(244, 246, 238, 0.9);
 		padding: 0.65rem 0.9rem;
 		border-radius: 6px;
 		font-weight: 800;
+		text-transform: uppercase;
 		transition:
 			background-color 0.2s ease-out,
 			opacity 0.2s ease-out;
 	}
 	.mobsters-add-button:hover {
-		background-color: #2d2d2d;
+		background-color: rgba(244, 246, 238, 0.12);
 	}
 	.mobsters-add-button:disabled {
 		cursor: not-allowed;
@@ -129,18 +134,22 @@
 		margin-left: auto;
 		border-radius: 6px;
 		padding: 0.2rem 0.4rem;
-		color: #8a1f1f;
+		color: #f4f6ee;
+		opacity: 0.65;
 		transition: background-color 0.2s ease-out;
 	}
 	.mobster-delete-button:hover {
-		background-color: #fee2e2;
+		background-color: rgba(244, 246, 238, 0.12);
+		opacity: 1;
 	}
 	.mobster-name-button {
 		flex: 1;
 		background: none;
-		border: none;
+		border: 1px solid rgba(244, 246, 238, 0.14);
 		border-radius: 6px;
-		padding: 0.35rem 0.5rem;
+		padding: 0.7rem 0.85rem;
+		color: #f4f6ee;
+		font-weight: 850;
 		text-align: left;
 		transition: background-color 0.2s ease-out;
 	}
@@ -150,8 +159,9 @@
 		gap: 0.5rem;
 	}
 	.active {
-		background-color: #eef4ff;
-		color: #214f9b;
+		border-color: rgba(169, 204, 69, 0.72);
+		background-color: rgba(169, 204, 69, 0.16);
+		color: #cfe965;
 		font-weight: bold;
 	}
 </style>

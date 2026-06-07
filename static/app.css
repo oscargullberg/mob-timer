@@ -61,11 +61,11 @@ html {
 
 body {
 	min-height: 100vh;
-	background-color: #111318;
+	background-color: #050505;
 }
 :root {
-	--header-background-color: rgba(23, 25, 31, 0.92);
-	--header-text-color: #f0f3f6;
+	--header-background-color: rgba(5, 5, 5, 0.92);
+	--header-text-color: #f4f6ee;
 	--header-item-spacing: 0.5rem;
-	--button-text: #f0f3f6;
+	--button-text: #f4f6ee;
 }

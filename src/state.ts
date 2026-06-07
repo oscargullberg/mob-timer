@@ -169,6 +169,21 @@ export function getTimerRemainingSeconds(timerState: TimerState, now = Date.now(
 	return clampTimerSeconds(timerState.remainingSeconds - elapsedSeconds, timerState.initialSeconds);
 }
 
+export function getTimerProgress({
+	initialSeconds,
+	remainingSeconds
+}: Pick<TimerState, 'initialSeconds' | 'remainingSeconds'>): number {
+	if (!Number.isFinite(initialSeconds) || initialSeconds <= 0) {
+		return 1;
+	}
+
+	const safeRemaining = Number.isFinite(remainingSeconds)
+		? Math.min(initialSeconds, Math.max(0, remainingSeconds))
+		: 0;
+
+	return safeRemaining / initialSeconds;
+}
+
 export function startTimer(timerState: TimerState, now = Date.now()): TimerState {
 	return {
 		...timerState,

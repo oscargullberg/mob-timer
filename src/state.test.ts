@@ -9,6 +9,7 @@ import {
 	createRoomId,
 	formatRemaining,
 	getTimerRemainingSeconds,
+	getTimerProgress,
 	isSameOrNewerAppStateVersion,
 	isNewerAppStateVersion,
 	normalizeAppStateVersion,
@@ -140,6 +141,14 @@ describe('timer state helpers', () => {
 	it('formats negative or invalid remaining time as zero', () => {
 		assert.deepEqual(formatRemaining(-1), { minutes: '00', seconds: '00' });
 		assert.deepEqual(formatRemaining(Number.NaN), { minutes: '00', seconds: '00' });
+	});
+
+	it('calculates timer progress as remaining time over initial duration', () => {
+		assert.equal(getTimerProgress({ initialSeconds: 600, remainingSeconds: 600 }), 1);
+		assert.equal(getTimerProgress({ initialSeconds: 600, remainingSeconds: 300 }), 0.5);
+		assert.equal(getTimerProgress({ initialSeconds: 600, remainingSeconds: 0 }), 0);
+		assert.equal(getTimerProgress({ initialSeconds: 600, remainingSeconds: 700 }), 1);
+		assert.equal(getTimerProgress({ initialSeconds: 0, remainingSeconds: 0 }), 1);
 	});
 
 	it('derives remaining seconds from running timer state', () => {
