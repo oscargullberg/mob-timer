@@ -29,6 +29,8 @@ npm audit --audit-level=moderate
 
 ## Deploy
 
+Pushes to `main` now deploy automatically through GitHub Actions.
+
 ```sh
 npm run deploy
 ```
