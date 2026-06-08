@@ -50,6 +50,7 @@ jobs:
         run: npm run build
         env:
           NODE_ENV: production
+          VITE_UMAMI_WEBSITE_ID: ${{ vars.VITE_UMAMI_WEBSITE_ID }}
 
       - name: Prepare GitHub Pages files
         run: |
