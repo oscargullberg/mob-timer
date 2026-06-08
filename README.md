@@ -17,6 +17,12 @@ npm install
 npm run dev
 ```
 
+## Analytics
+
+Set `VITE_UMAMI_WEBSITE_ID` at build time to enable Umami page view analytics.
+The tracker uses `https://cloud.umami.is/script.js` by default. Set
+`VITE_UMAMI_SCRIPT_URL` to use a self-hosted Umami script.
+
 ## Checks
 
 ```sh

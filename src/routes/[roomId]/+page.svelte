@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { trackAnalyticsEvent } from '../../analytics';
 	import Peer from '../../components/Peer.svelte';
 	import Mobsters from '../../components/Mobsters.svelte';
 	import Timer from '../../components/Timer.svelte';
@@ -57,6 +58,9 @@
 	}
 
 	function onTurnFinished() {
+		trackAnalyticsEvent('timer_finished', {
+			duration_minutes: Math.round($timerState.initialSeconds / 60)
+		});
 		mobsters.changeMobster();
 		timerState.update((state) => resetTimer(state, Date.now()));
 		updateBroadcastState();

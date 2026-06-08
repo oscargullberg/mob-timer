@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { trackAnalyticsEvent } from '../analytics';
 	import { mobsters, activeMobster } from '../stores';
 	import { createMobster, removeMobster, setActiveMobster } from '../state';
 	import { blur } from 'svelte/transition';
@@ -18,11 +19,21 @@
 
 		$mobsters = [...$mobsters, createMobster(trimmedName, !$activeMobster)];
 		newMobsterName = '';
+		trackAnalyticsEvent('mobster_add', {
+			mobster_count: $mobsters.length
+		});
 		onMobstersUpdated?.();
 	}
 
 	function remove(id: string) {
+		if (!$mobsters.some((mobster) => mobster.id === id)) {
+			return;
+		}
+
 		$mobsters = removeMobster($mobsters, id);
+		trackAnalyticsEvent('mobster_remove', {
+			mobster_count: $mobsters.length
+		});
 		onMobstersUpdated?.();
 	}
 

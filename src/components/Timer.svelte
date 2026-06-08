@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { trackAnalyticsEvent } from '../analytics';
 	import { isMainPeer, remaining, timerProgress, timerState } from '../stores';
 	import {
 		pauseTimer,
@@ -83,7 +84,20 @@
 
 	async function handleToggleClick() {
 		const now = Date.now();
+		const wasRunning = $timerState.running;
+		const durationMinutes = getDurationMinutes($timerState.initialSeconds);
+
 		timerState.update((state) => (state.running ? pauseTimer(state, now) : startTimer(state, now)));
+		if (wasRunning) {
+			trackAnalyticsEvent('timer_stop', {
+				duration_minutes: durationMinutes
+			});
+		} else {
+			trackAnalyticsEvent('timer_start', {
+				duration_minutes: durationMinutes
+			});
+		}
+
 		if ('Notification' in window) {
 			await Notification.requestPermission();
 		}
@@ -91,8 +105,15 @@
 	}
 
 	function handleResetClick() {
+		const wasRunning = $timerState.running;
+		const durationMinutes = getDurationMinutes($timerState.initialSeconds);
+
 		timerState.update((state) => resetTimer(state, Date.now()));
 		oozeSeed = createOozeSeed();
+		trackAnalyticsEvent('timer_reset', {
+			duration_minutes: durationMinutes,
+			was_running: wasRunning
+		});
 		onTimerConfigUpdated?.();
 	}
 
@@ -103,7 +124,14 @@
 		input.value = String(minutes);
 		timerState.update((state) => setTimerDuration(state, minutes, Date.now()));
 		oozeSeed = createOozeSeed();
+		trackAnalyticsEvent('duration_change', {
+			duration_minutes: minutes
+		});
 		onTimerConfigUpdated?.();
+	}
+
+	function getDurationMinutes(seconds: number) {
+		return Math.round(seconds / 60);
 	}
 
 	function createOozeSeed() {
@@ -513,11 +541,15 @@
 			opacity: var(--drop-opacity);
 		}
 		88% {
-			transform: translateY(86px) scale(1.35, 0.34);
+			transform: translateY(106px) scale(1.28, 0.42);
+			opacity: var(--drop-opacity);
+		}
+		96% {
+			transform: translateY(114px) scale(1.42, 0.24);
 			opacity: var(--drop-splash-opacity);
 		}
 		100% {
-			transform: translateY(90px) scale(1.45, 0.18);
+			transform: translateY(118px) scale(1.48, 0.14);
 			opacity: 0;
 		}
 	}
